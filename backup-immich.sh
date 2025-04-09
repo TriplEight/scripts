@@ -25,20 +25,58 @@ if  [ -z "${PORTAINER_URL}" ] || \
     [ -z "${PORTAINER_PASSWORD}" ] || \
     [ -z "${POSTGRES_CONTAINER}" ] || \
     [ -z "${RESTIC_REPOSITORY}" ] || \
-    [ -z "${RESTIC_PASSWORD}" ] ; then
+    [ -z "${RESTIC_PASSWORD}" ] || \
+    [ -z "${ALERTING_URL}" ]; then
     echo "Required variables are not set in .env file. Please check the file."
+    exit 1
+fi
+
+###################################################################
+# Alerting
+###################################################################
+
+# Usage:
+#   send_kuma_push_failure "<COMMAND_OUTPUT>"
+#
+# Example:
+#   if ! some_command 2>&1; then
+#       cmd_output="$(some_command 2>&1)"
+#       send_kuma_push_failure "$cmd_output"
+#   fi
+
+send_kuma_push_failure() {
+  local cmd_output="$1"
+
+  local msg="Immich backup failed. Output: ${cmd_output}"
+
+  # with the message in the "msg" query parameter:
+  curl -fsS -m 10 --retry 5 "${ALERTING_URL}?status=down&msg=${msg}&ping="
+}
+
+###################################################################
+# Checks
+###################################################################
+
+# check if restic is installed
+if ! command -v restic &> /dev/null
+then
+    send_kuma_push_failure "Restic not found"
+    echo "Restic could not be found. Please install it first."
     exit 1
 fi
 
 # check if restic repository is reachable
 restic -r "${RESTIC_REPOSITORY}" cat config >/dev/null 2>&1
 if [ $? -eq 10 ]; then
+  send_kuma_push_failure "Restic repository does not exist"
   echo "Repository does not exist"
+  exit 1
 fi
 
 # check if docker is installed
 if ! command -v docker &> /dev/null
 then
+    send_kuma_push_failure "Docker not found"
     echo "Docker could not be found. Please install it first."
     exit 1
 fi
@@ -46,25 +84,22 @@ fi
 # check if immich stack is running
 if docker inspect "${POSTGRES_CONTAINER}" > /dev/null 2>&1; then
     if docker inspect -f '{{.State.Running}}' "${POSTGRES_CONTAINER}" | grep -q "true"; then
-        echo "${POSTGRES_CONTAINER} container exists and is running"
+        echo "==> ${POSTGRES_CONTAINER} container exists and is running."
     else
-        echo "${POSTGRES_CONTAINER} container exists but is stopped"
+        send_kuma_push_failure "${POSTGRES_CONTAINER} container is stopped"
+        echo "==> ${POSTGRES_CONTAINER} container exists but is stopped. Please start it first."
+        exit 1
     fi
 else
+    send_kuma_push_failure "${POSTGRES_CONTAINER} container does not exist"
     echo "Container does not exist"
-    exit 1
-fi
-
-# check if restic is installed
-if ! command -v restic &> /dev/null
-then
-    echo "Restic could not be found. Please install it first."
     exit 1
 fi
 
 # check if httpie is installed
 if ! command -v http &> /dev/null
 then
+    send_kuma_push_failure "httpie not found"
     echo "httpie could not be found. Please install it first."
     exit 1
 fi
@@ -72,6 +107,7 @@ fi
 # check if jq is installed
 if ! command -v jq &> /dev/null
 then
+    send_kuma_push_failure "jq not found"
     echo "jq could not be found. Please install it first."
     exit 1
 fi
@@ -86,7 +122,7 @@ JWT_TOKEN=$(http --verify=no POST "${PORTAINER_URL}"/api/auth Username="$PORTAIN
 # get stacks data
 STACKS=$(http --verify=no GET "${PORTAINER_URL}"/api/stacks "Authorization: Bearer $JWT_TOKEN")
 # get the stack data for immich
-# DB_DATABASE_NAME=$(echo ${STACKS} | jq -r '.[] | select(.Name=="immich") | .Env[] | select(.name=="DB_DATABASE_NAME") | .value')
+DB_DATABASE_NAME=$(echo "${STACKS}" | jq -r '.[] | select(.Name=="immich") | .Env[] | select(.name=="DB_DATABASE_NAME") | .value')
 DB_USERNAME=$(echo "${STACKS}" | jq -r '.[] | select(.Name=="immich") | .Env[] | select(.name=="DB_USERNAME") | .value')
 DB_PASSWORD=$(echo "${STACKS}" | jq -r '.[] | select(.Name=="immich") | .Env[] | select(.name=="DB_PASSWORD") | .value')
 UPLOAD_LOCATION=$(echo "${STACKS}" | jq -r '.[] | select(.Name=="immich") | .Env[] | select(.name=="UPLOAD_LOCATION") | .value')
@@ -109,17 +145,15 @@ docker exec -t -u postgres "${POSTGRES_CONTAINER}"  \
     pg_dumpall --clean \
                --if-exists \
                --username="${DB_USERNAME}" \
-               --database=postgres' \
+               --database="${DB_DATABASE_NAME}' \
     > "${DB_DUMP_PATH}"
 echo "==> Successfully created database dump at ${DB_DUMP_PATH}"
+du -sh "${DB_DUMP_PATH}"
 
 ###################################################################
 # Step 2: Run restic backup (database dump + photos)
 ###################################################################
 echo "==> Starting Restic backup..."
-
-# Initialize the repository if it hasn't been done yet (safe to run repeatedly)
-restic init || true
 
 # Back up both the database dump file and the photo directory
 restic backup \
@@ -127,6 +161,7 @@ restic backup \
   --exclude thumbs \
   --exclude backups \
   --tag "$(date +'%Y%m%d_%H%M%S')" \
+  --tag restic_cli \
   "${UPLOAD_LOCATION}"
 
 echo "==> Restic backup complete."
@@ -147,9 +182,7 @@ restic forget \
 
 echo "==> Pruning complete."
 
-###################################################################
-# Optional: Clean up local DB dumps older than X days
-###################################################################
-# find "${DB_DUMP_DIR}" -name "immich_db_*.sql" -type f -mtime +7 -exec rm {} \;
+echo "==> Updating Uptime Kuma status..."
+curl -fsS -m 10 --retry 5 "${ALERTING_URL}?status=up&msg=Backup+Completed&ping="
 
-echo "==> All done!"
+echo "==> Backup complete."
