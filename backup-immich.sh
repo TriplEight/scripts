@@ -46,9 +46,9 @@ fi
 # check if immich stack is running
 if docker inspect "${POSTGRES_CONTAINER}" > /dev/null 2>&1; then
     if docker inspect -f '{{.State.Running}}' "${POSTGRES_CONTAINER}" | grep -q "true"; then
-        echo "Container exists and is running"
+        echo "${POSTGRES_CONTAINER} container exists and is running"
     else
-        echo "Container exists but is stopped"
+        echo "${POSTGRES_CONTAINER} container exists but is stopped"
     fi
 else
     echo "Container does not exist"
@@ -104,13 +104,13 @@ mkdir -p "${DB_DUMP_DIR}"
 ###################################################################
 # Backup Immich database
 echo "==> Dumping Postgres database..."
-docker exec -t "${POSTGRES_CONTAINER}" \
-  pg_dumpall --clean \
-            --if-exists \
-            --username="${DB_USERNAME}" \
-            --password="${DB_PASSWORD}" \
-  > "${DB_DUMP_PATH}"
-
+docker exec -t -u postgres "${POSTGRES_CONTAINER}"  \
+  bash -c 'PGPASSWORD="${DB_PASSWORD}" \
+    pg_dumpall --clean \
+               --if-exists \
+               --username="${DB_USERNAME}" \
+               --database=postgres' \
+    > "${DB_DUMP_PATH}"
 echo "==> Successfully created database dump at ${DB_DUMP_PATH}"
 
 ###################################################################
