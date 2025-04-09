@@ -11,6 +11,9 @@ set -euo pipefail
 # shellcheck source=.env
 source .env
 
+export RESTIC_REPOSITORY
+export RESTIC_PASSWORD
+
 # check if .env file exists
 if [ ! -f .env ]; then
     echo ".env file not found. Please create one with the required variables."
@@ -28,9 +31,9 @@ if  [ -z "${PORTAINER_URL}" ] || \
 fi
 
 # check if restic repository is reachable
-if ! restic -r "${RESTIC_REPOSITORY}" init &> /dev/null; then
-    echo "Restic repository is not reachable. Please check the repository URL and credentials."
-    exit 1
+restic -r "${RESTIC_REPOSITORY}" cat config >/dev/null 2>&1
+if [ $? -eq 10 ]; then
+  echo "Repository does not exist"
 fi
 
 # check if docker is installed
@@ -41,8 +44,14 @@ then
 fi
 
 # check if immich stack is running
-if ! docker ps | grep -q "${POSTGRES_CONTAINER}"; then
-    echo "Immich stack is not running. Please check the stack."
+if docker inspect "${POSTGRES_CONTAINER}" > /dev/null 2>&1; then
+    if docker inspect -f '{{.State.Running}}' "${POSTGRES_CONTAINER}" | grep -q "true"; then
+        echo "Container exists and is running"
+    else
+        echo "Container exists but is stopped"
+    fi
+else
+    echo "Container does not exist"
     exit 1
 fi
 
@@ -117,7 +126,6 @@ restic backup \
   --exclude encoded-video \
   --exclude thumbs \
   --exclude backups \
-  --tag immich-backup \
   --tag "$(date +'%Y%m%d_%H%M%S')" \
   "${UPLOAD_LOCATION}"
 
