@@ -96,11 +96,11 @@ else
     exit 1
 fi
 
-# check if curl is installed
-if ! command -v curl &> /dev/null
+# check if httpie is installed
+if ! command -v http &> /dev/null
 then
-    send_kuma_push_failure "curl not found"
-    echo "curl could not be found. Please install it first."
+    send_kuma_push_failure "httpie not found"
+    echo "httpie could not be found. Please install it first."
     exit 1
 fi
 
@@ -118,14 +118,9 @@ fi
 
 ### query local portainer instance api for immich stack data
 # get the jwt token
-JWT_TOKEN=$(curl -k -X POST "${PORTAINER_URL}/api/auth" \
-                -H "Content-Type: application/json" \
-                -d '{"Username":"'"$PORTAINER_USERNAME"'","Password":"'"$PORTAINER_PASSWORD"'"}' \
-            | jq -r '.jwt')
+JWT_TOKEN=$(http --verify=no POST "${PORTAINER_URL}"/api/auth Username="$PORTAINER_USERNAME" Password="$PORTAINER_PASSWORD" | jq -r '.jwt')
 # get stacks data
-STACKS=$(curl -k -X POST "${PORTAINER_URL}/api/stacks" \
-              -H "Content-Type: application/json" \
-              -d '{"Authorization":"Bearer" "'"$JWT_TOKEN"'")')
+STACKS=$(http --verify=no GET "${PORTAINER_URL}"/api/stacks "Authorization: Bearer $JWT_TOKEN")
 # get the stack data for immich
 DB_DATABASE_NAME=$(echo "${STACKS}" | jq -r '.[] | select(.Name=="immich") | .Env[] | select(.name=="DB_DATABASE_NAME") | .value')
 DB_USERNAME=$(echo "${STACKS}" | jq -r '.[] | select(.Name=="immich") | .Env[] | select(.name=="DB_USERNAME") | .value')
@@ -150,7 +145,7 @@ docker exec -t -u postgres "${POSTGRES_CONTAINER}"  \
     pg_dumpall --clean \
                --if-exists \
                --username="${DB_USERNAME}" \
-               --database="${DB_DATABASE_NAME}' \
+               --database="${DB_DATABASE_NAME}"' \
     > "${DB_DUMP_PATH}"
 echo "==> Successfully created database dump at ${DB_DUMP_PATH}"
 du -sh "${DB_DUMP_PATH}"
