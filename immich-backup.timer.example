@@ -1,0 +1,14 @@
+# /etc/systemd/system/immich-backup.timer
+[Unit]
+Description=Run Immich Backup daily
+
+[Timer]
+# This tells systemd to run the associated service every day at 06:00:00
+OnCalendar=*-*-* 06:00:00
+# OnCalendar=daily
+
+# If the machine was off during 06:00, this ensures the job runs once when it is powered on.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

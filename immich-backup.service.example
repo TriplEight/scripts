@@ -1,0 +1,21 @@
+# /etc/systemd/system/immich-backup.service
+[Unit]
+Description=Immich Backup Service
+
+[Service]
+# We use Type=oneshot because this service runs a single task and then exits
+Type=oneshot
+
+# The user under which the script will run.
+# You can change this to 'root' or a dedicated user if needed.
+User=your_username
+
+# The command that actually runs your backup script
+ExecStart=/path/to/backup_immich.sh
+
+# Optionally set an environment or working directory if needed:
+# Environment="RESTIC_PASSWORD=some-long-password"
+# WorkingDirectory=/path/to/scripts
+
+[Install]
+WantedBy=multi-user.target
