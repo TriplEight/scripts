@@ -1,0 +1,11 @@
+# /etc/systemd/system/immich-backup.timer
+[Unit]
+Description=Run Immich Backup daily
+
+[Timer]
+# OnCalendar=daily
+OnCalendar=*-*-* 06:00:00  (every day at 6:00 AM)
+Persistent=true
+
+[Install]
+WantedBy=timers.target

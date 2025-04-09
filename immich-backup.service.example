@@ -1,0 +1,14 @@
+# /etc/systemd/system/immich-backup.service
+[Unit]
+Description=Immich Backup
+
+[Service]
+Type=oneshot
+User=your_username
+ExecStart=/path/to/backup_immich.sh
+# Optionally set an environment or working directory if needed:
+# Environment="RESTIC_PASSWORD=some-long-password"
+# WorkingDirectory=/path/to/scripts
+
+[Install]
+WantedBy=multi-user.target
