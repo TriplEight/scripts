@@ -96,11 +96,11 @@ else
     exit 1
 fi
 
-# check if httpie is installed
-if ! command -v http &> /dev/null
+# check if curl is installed
+if ! command -v curl &> /dev/null
 then
-    send_kuma_push_failure "httpie not found"
-    echo "httpie could not be found. Please install it first."
+    send_kuma_push_failure "curl not found"
+    echo "curl could not be found. Please install it first."
     exit 1
 fi
 
@@ -118,9 +118,14 @@ fi
 
 ### query local portainer instance api for immich stack data
 # get the jwt token
-JWT_TOKEN=$(http --verify=no POST "${PORTAINER_URL}"/api/auth Username="$PORTAINER_USERNAME" Password="$PORTAINER_PASSWORD" | jq -r '.jwt')
+JWT_TOKEN=$(curl -sk -X POST "${PORTAINER_URL}/api/auth" \
+    -H "Content-Type: application/json" \
+    -d "{\"Username\":\"${PORTAINER_USERNAME}\",\"Password\":\"${PORTAINER_PASSWORD}\"}" | jq -r '.jwt')
+
 # get stacks data
-STACKS=$(http --verify=no GET "${PORTAINER_URL}"/api/stacks "Authorization: Bearer $JWT_TOKEN")
+STACKS=$(curl -sk -X GET "${PORTAINER_URL}/api/stacks" \
+    -H "Authorization: Bearer ${JWT_TOKEN}")
+
 # get the stack data for immich
 DB_DATABASE_NAME=$(echo "${STACKS}" | jq -r '.[] | select(.Name=="immich") | .Env[] | select(.name=="DB_DATABASE_NAME") | .value')
 DB_USERNAME=$(echo "${STACKS}" | jq -r '.[] | select(.Name=="immich") | .Env[] | select(.name=="DB_USERNAME") | .value')
@@ -183,6 +188,6 @@ restic forget \
 echo "==> Pruning complete."
 
 echo "==> Updating Uptime Kuma status..."
-curl -fsS -m 10 --retry 5 "${ALERTING_URL}?status=up&msg=Backup+Completed&ping="
+curl -fsS -m 10 --retry 5 "${ALERTING_URL}?status=up&msg=Backup+Completed&ping=" >/dev/null
 
 echo "==> Backup complete."
