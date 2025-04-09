@@ -20,34 +20,12 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-
-
 ###################################################################
-# Adjust these variables to match your environment
+# Adjust variables in .env
 ###################################################################
 
 # shellcheck source=.env
 source .env
-
-export RESTIC_REPOSITORY
-export RESTIC_PASSWORD
-
-# check if .env file exists
-if [ ! -f .env ]; then
-    log ".env file not found. Please create one with the required variables."
-    exit 1
-fi
-# check if required variables are set
-if  [ -z "${PORTAINER_URL}" ] || \
-    [ -z "${PORTAINER_USERNAME}" ] || \
-    [ -z "${PORTAINER_PASSWORD}" ] || \
-    [ -z "${POSTGRES_CONTAINER}" ] || \
-    [ -z "${RESTIC_REPOSITORY}" ] || \
-    [ -z "${RESTIC_PASSWORD}" ] || \
-    [ -z "${ALERTING_URL}" ]; then
-    log "Required variables are not set in .env file. Please check the file."
-    exit 1
-fi
 
 ###################################################################
 # Alerting
@@ -70,6 +48,26 @@ send_kuma_push_failure() {
   # with the message in the "msg" query parameter:
   curl -fsS -m 10 --retry 5 "${ALERTING_URL}?status=down&msg=${msg}&ping="
 }
+
+export RESTIC_REPOSITORY
+export RESTIC_PASSWORD
+
+# check if .env file exists
+if [ ! -f .env ]; then
+    log ".env file not found. Please create one with the required variables."
+    exit 1
+fi
+# check if required variables are set
+if  [ -z "${PORTAINER_URL}" ] || \
+    [ -z "${PORTAINER_USERNAME}" ] || \
+    [ -z "${PORTAINER_PASSWORD}" ] || \
+    [ -z "${POSTGRES_CONTAINER}" ] || \
+    [ -z "${RESTIC_REPOSITORY}" ] || \
+    [ -z "${RESTIC_PASSWORD}" ]; then
+    send_kuma_push_failure "Required variables are not set in .env file"
+    log "Required variables are not set in .env file. Please check the file."
+    exit 1
+fi
 
 ###################################################################
 # Checks
