@@ -4,6 +4,8 @@ various helpful scripts
 
 ## immich backup
 
+For alerting relies on Uptime Kuma with a Push monitor.
+
 1. `git clone` this repo to, say `/home/youruser/.config/scripts`
 
 ### .env
@@ -28,3 +30,8 @@ various helpful scripts
 1. `sudo systemctl daemon-reload`
 2. `sudo systemctl enable immich-backup.timer`
 3. `sudo systemctl start immich-backup.timer`
+
+### check
+
+- to see if the timer is active and the next run time: `systemctl list0timers`
+- to see logs of the service: `journalctl -u immich-backup.service`
