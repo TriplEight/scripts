@@ -4,6 +4,24 @@
 
 set -euo pipefail
 
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
+}
+
+cleanup() {
+  local exit_code=$?
+  log "==> Cleaning up..."
+  rm -f "${DB_DUMP_PATH}"
+  if [ $exit_code -ne 0 ]; then
+    send_kuma_push_failure "Script interrupted with exit code $exit_code"
+  fi
+  exit $exit_code
+}
+
+trap cleanup EXIT INT TERM
+
+
+
 ###################################################################
 # Adjust these variables to match your environment
 ###################################################################
@@ -16,7 +34,7 @@ export RESTIC_PASSWORD
 
 # check if .env file exists
 if [ ! -f .env ]; then
-    echo ".env file not found. Please create one with the required variables."
+    log ".env file not found. Please create one with the required variables."
     exit 1
 fi
 # check if required variables are set
@@ -27,7 +45,7 @@ if  [ -z "${PORTAINER_URL}" ] || \
     [ -z "${RESTIC_REPOSITORY}" ] || \
     [ -z "${RESTIC_PASSWORD}" ] || \
     [ -z "${ALERTING_URL}" ]; then
-    echo "Required variables are not set in .env file. Please check the file."
+    log "Required variables are not set in .env file. Please check the file."
     exit 1
 fi
 
@@ -61,7 +79,7 @@ send_kuma_push_failure() {
 if ! command -v restic &> /dev/null
 then
     send_kuma_push_failure "Restic not found"
-    echo "Restic could not be found. Please install it first."
+    log "Restic could not be found. Please install it first."
     exit 1
 fi
 
@@ -69,7 +87,7 @@ fi
 restic -r "${RESTIC_REPOSITORY}" cat config >/dev/null 2>&1
 if [ $? -eq 10 ]; then
   send_kuma_push_failure "Restic repository does not exist"
-  echo "Repository does not exist"
+  log "Repository does not exist"
   exit 1
 fi
 
@@ -77,22 +95,22 @@ fi
 if ! command -v docker &> /dev/null
 then
     send_kuma_push_failure "Docker not found"
-    echo "Docker could not be found. Please install it first."
+    log "Docker could not be found. Please install it first."
     exit 1
 fi
 
 # check if immich stack is running
 if docker inspect "${POSTGRES_CONTAINER}" > /dev/null 2>&1; then
     if docker inspect -f '{{.State.Running}}' "${POSTGRES_CONTAINER}" | grep -q "true"; then
-        echo "==> ${POSTGRES_CONTAINER} container exists and is running."
+        log "==> ${POSTGRES_CONTAINER} container exists and is running."
     else
         send_kuma_push_failure "${POSTGRES_CONTAINER} container is stopped"
-        echo "==> ${POSTGRES_CONTAINER} container exists but is stopped. Please start it first."
+        log "==> ${POSTGRES_CONTAINER} container exists but is stopped. Please start it first."
         exit 1
     fi
 else
     send_kuma_push_failure "${POSTGRES_CONTAINER} container does not exist"
-    echo "Container does not exist"
+    log "Container does not exist"
     exit 1
 fi
 
@@ -100,7 +118,7 @@ fi
 if ! command -v curl &> /dev/null
 then
     send_kuma_push_failure "curl not found"
-    echo "curl could not be found. Please install it first."
+    log "curl could not be found. Please install it first."
     exit 1
 fi
 
@@ -108,7 +126,7 @@ fi
 if ! command -v jq &> /dev/null
 then
     send_kuma_push_failure "jq not found"
-    echo "jq could not be found. Please install it first."
+    log "jq could not be found. Please install it first."
     exit 1
 fi
 
@@ -122,6 +140,11 @@ JWT_TOKEN=$(curl -sk -X POST "${PORTAINER_URL}/api/auth" \
     -H "Content-Type: application/json" \
     -d "{\"Username\":\"${PORTAINER_USERNAME}\",\"Password\":\"${PORTAINER_PASSWORD}\"}" | jq -r '.jwt')
 
+if [ -z "${JWT_TOKEN}" ]; then
+    send_kuma_push_failure "Failed to get JWT token from Portainer"
+    exit 1
+fi
+
 # get stacks data
 STACKS=$(curl -sk -X GET "${PORTAINER_URL}/api/stacks" \
     -H "Authorization: Bearer ${JWT_TOKEN}")
@@ -131,6 +154,12 @@ DB_DATABASE_NAME=$(echo "${STACKS}" | jq -r '.[] | select(.Name=="immich") | .En
 DB_USERNAME=$(echo "${STACKS}" | jq -r '.[] | select(.Name=="immich") | .Env[] | select(.name=="DB_USERNAME") | .value')
 DB_PASSWORD=$(echo "${STACKS}" | jq -r '.[] | select(.Name=="immich") | .Env[] | select(.name=="DB_PASSWORD") | .value')
 UPLOAD_LOCATION=$(echo "${STACKS}" | jq -r '.[] | select(.Name=="immich") | .Env[] | select(.name=="UPLOAD_LOCATION") | .value')
+
+# Validate that we got the required environment variables
+if [ -z "${DB_DATABASE_NAME}" ] || [ -z "${DB_USERNAME}" ] || [ -z "${DB_PASSWORD}" ] || [ -z "${UPLOAD_LOCATION}" ]; then
+    send_kuma_push_failure "Failed to get required environment variables from Portainer"
+    exit 1
+fi
 
 # Directory to store the temporary database dump
 # backup script assumes it's within UPLOAD_LOCATION
@@ -144,32 +173,41 @@ mkdir -p "${DB_DUMP_DIR}"
 # Step 1: Dump the Postgres database
 ###################################################################
 # Backup Immich database
-echo "==> Dumping Postgres database..."
-docker exec -t -u postgres "${POSTGRES_CONTAINER}"  \
+log "==> Dumping Postgres database..."
+if ! docker exec -t -u postgres "${POSTGRES_CONTAINER}"  \
   bash -c 'PGPASSWORD="${DB_PASSWORD}" \
     pg_dumpall --clean \
                --if-exists \
                --username="${DB_USERNAME}" \
                --database="${DB_DATABASE_NAME}"' \
-    > "${DB_DUMP_PATH}"
-echo "==> Successfully created database dump at ${DB_DUMP_PATH}"
+    > "${DB_DUMP_PATH}"; then
+    send_kuma_push_failure "Database dump failed"
+    exit 1
+fi
+log "==> Successfully created database dump at ${DB_DUMP_PATH}"
 du -sh "${DB_DUMP_PATH}"
 
 ###################################################################
 # Step 2: Run restic backup (database dump + photos)
 ###################################################################
-echo "==> Starting Restic backup..."
+log "==> Starting Restic backup..."
 
-# Back up both the database dump file and the photo directory
-restic backup \
+# Back up both the database dump file and the immich directories
+if ! restic backup \
   --exclude encoded-video \
   --exclude thumbs \
   --exclude backups \
   --tag "$(date +'%Y%m%d_%H%M%S')" \
   --tag restic_cli \
-  "${UPLOAD_LOCATION}"
+  "${UPLOAD_LOCATION}"; then
+    send_kuma_push_failure "Restic backup failed"
+    exit 1
+fi
 
-echo "==> Restic backup complete."
+log "==> Restic backup complete."
+
+log "==> Cleaning up temporary files..."
+rm -f "${DB_DUMP_PATH}"
 
 ###################################################################
 # Step 3: Prune old backups
@@ -178,16 +216,16 @@ echo "==> Restic backup complete."
 #   --keep-daily 7   Keep 7 daily snapshots
 #   --keep-weekly 4  Keep 4 weekly snapshots
 #   --keep-monthly 6 Keep 6 monthly snapshots
-echo "==> Forgetting old snapshots and pruning..."
+log "==> Forgetting old snapshots and pruning..."
 restic forget \
   --keep-daily 7 \
   --keep-weekly 4 \
   --keep-monthly 6 \
   --prune
 
-echo "==> Pruning complete."
+log "==> Pruning complete."
 
-echo "==> Updating Uptime Kuma status..."
+log "==> Updating Uptime Kuma status..."
 curl -fsS -m 10 --retry 5 "${ALERTING_URL}?status=up&msg=Backup+Completed&ping=" >/dev/null
 
-echo "==> Backup complete."
+log "==> Backup complete."
