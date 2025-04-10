@@ -43,3 +43,9 @@ For alerting relies on Uptime Kuma with a Push monitor.
 3. Edit your compose, add a new volume `- /path/to/restored/location/database-backup/immich-database.sql:/var`. Point your `UPLOAD_LOCATION` to `/restored/location/path/to/dir/immich`.
 4. Run the stack
 5. `docker exec -t -u postgres immich_postgres bash -c 'PGPASSWORD="xxx" psql -U postgres -f /var/immich-database.sql'`
+
+### TODO
+
+1. script could be more informative
+2. too many effort on internal alerting: remove all the alerts and make an external alerting script, run it as another service. It should send the error message as well.
+3. if script fails it's pretty brittle
