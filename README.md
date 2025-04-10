@@ -35,3 +35,11 @@ For alerting relies on Uptime Kuma with a Push monitor.
 
 - to see if the timer is active and the next run time: `systemctl list0timers`
 - to see logs of the service: `journalctl -u immich-backup.service`
+
+### restore
+
+1. `RESTIC_PASSWORD=xxx restic -r /restic/repo restore [snapshot_id] --target /restored/location/`
+2. Make sure you have a compose and .env files (they should be in Portainer backup). Make sure your username and database name in .env match with what you use below
+3. Edit your compose, add a new volume `- /path/to/restored/location/database-backup/immich-database.sql:/var`. Point your `UPLOAD_LOCATION` to `/restored/location/path/to/dir/immich`.
+4. Run the stack
+5. `docker exec -t -u postgres immich_postgres bash -c 'PGPASSWORD="xxx" psql -U postgres -f /var/immich-database.sql'`
