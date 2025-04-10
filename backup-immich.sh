@@ -44,6 +44,8 @@ send_kuma_push_failure() {
   local cmd_output="$1"
 
   local msg="Immich backup failed. Output: ${cmd_output}"
+  # substitute spaces with plus signs
+  msg="${msg// /+}"
 
   # with the message in the "msg" query parameter:
   curl -fsS -m 10 --retry 5 "${ALERTING_URL}?status=down&msg=${msg}&ping="
