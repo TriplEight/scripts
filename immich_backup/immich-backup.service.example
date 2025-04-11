@@ -11,11 +11,10 @@ Type=oneshot
 User=your_username
 
 # The command that actually runs your backup script
-ExecStart=/path/to/backup_immich.sh
-
-# Optionally set an environment or working directory if needed:
-# Environment="RESTIC_PASSWORD=some-long-password"
-# WorkingDirectory=/path/to/scripts
+ExecStart=backup_immich.sh
+ExecStart=/path/to/backup-immich.sh
+# The path to where .env file is
+WorkingDirectory=/path/to/env
 
 [Install]
 WantedBy=multi-user.target
