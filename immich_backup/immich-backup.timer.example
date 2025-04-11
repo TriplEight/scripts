@@ -9,6 +9,8 @@ OnCalendar=*-*-* 06:00:00
 
 # If the machine was off during 06:00, this ensures the job runs once when it is powered on.
 Persistent=true
+# Name of your target service
+Unit=immich-backup.service
 
 [Install]
 WantedBy=timers.target
