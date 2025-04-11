@@ -7,23 +7,24 @@ various helpful scripts
 For alerting relies on Uptime Kuma with a Push monitor.
 
 1. `git clone` this repo to, say `/home/youruser/.config/scripts`
+2. `cd /home/youruser/.config/scripts/immich-backup`
 
 ### .env
 
-1. `touch .env && cat immich_backup/.env.example >> .env`
+1. `cp .env.example .env`
 2. `edit .env` with your env data
 
 ### service
 
-1. `cp immich_backup/immich-backup.service.example immich-backup.service`
+1. `cp immich-backup.service.example immich-backup.service`
 2. `edit immich-backup.service` with your env data
-3. `sudo ln -s /home/youruser/.config/scripts/immich-backup.service /etc/systemd/system/immich-backup.service`
+3. `sudo ln -s /home/youruser/.config/scripts/immich-backup/immich-backup.service /etc/systemd/system/immich-backup.service`
 
 ### timer
 
-1. `cp immich_backup/immich-backup.timer.example immich-backup.timer`
+1. `cp immich-backup.timer.example immich-backup.timer`
 2. `edit immich-backup.timer` with your settings
-3. `sudo ln -s /home/youruser/.config/scripts/immich-backup.timer /etc/systemd/system/immich-backup.timer`
+3. `sudo ln -s /home/youruser/.config/scripts/immich-backup/immich-backup.timer /etc/systemd/system/immich-backup.timer`
 
 ### run service
 
