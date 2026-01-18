@@ -18,23 +18,22 @@ For alerting relies on Uptime Kuma with a Push monitor.
 
 1. `cp immich-backup.service.example immich-backup.service`
 2. `edit immich-backup.service` with your env data
-3. `sudo ln -s /home/youruser/.config/scripts/immich-backup/immich-backup.service /etc/systemd/system/immich-backup.service`
+3. `sudo systemctl link /home/youruser/.config/scripts/immich-backup/immich-backup.service`
 
 ### timer
 
 1. `cp immich-backup.timer.example immich-backup.timer`
 2. `edit immich-backup.timer` with your settings
-3. `sudo ln -s /home/youruser/.config/scripts/immich-backup/immich-backup.timer /etc/systemd/system/immich-backup.timer`
+3. `sudo systemctl link /home/youruser/.config/scripts/immich-backup/immich-backup.timer`
 
-### run service
+### run service with timer
 
-1. `sudo systemctl daemon-reload`
-2. `sudo systemctl enable immich-backup.timer`
-3. `sudo systemctl start immich-backup.timer`
+1. `sudo systemctl enable immich-backup.timer`
+2. `sudo systemctl start immich-backup.timer`
 
 ### check
 
-- to see if the timer is active and the next run time: `systemctl list0timers`
+- to see if the timer is active and the next run time: `systemctl list-timers`
 - to see logs of the service: `journalctl -u immich-backup.service`
 
 ### restore
